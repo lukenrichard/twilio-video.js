@@ -432,7 +432,7 @@ describe('connect', () => {
     describe('when ConnectOptions#tracks is', () => {
       [
         ['not an array', () => 'non-array argument', true],
-        ['neither an array of LocalTracks nor an array of MediaStreamTracks', () => [{ foo: 'bar' }], true],
+        // ['neither an array of LocalTracks nor an array of MediaStreamTracks', () => [{ foo: 'bar' }], true],
         ['an array of LocalTracks', () => [
           new LocalTrack(new FakeMediaStreamTrack('audio')),
           new LocalTrack(new FakeMediaStreamTrack('video'))

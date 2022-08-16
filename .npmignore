@@ -7,7 +7,6 @@
 *.sw*
 browsers
 coverage
-dist/docs
 docker
 logs
 node_modules

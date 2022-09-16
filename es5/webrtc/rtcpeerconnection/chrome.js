@@ -159,6 +159,7 @@ if (typeof RTCPeerConnection.prototype.addTrack !== 'function') {
             sender.track = null;
             this._peerConnection.removeStream(this._localStream);
             this._localStream.removeTrack(track);
+            console.log('banana is this getting called?', this._localStream);
             this._peerConnection.addStream(this._localStream);
         }
     };

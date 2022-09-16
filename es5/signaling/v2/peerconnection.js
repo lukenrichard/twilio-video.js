@@ -128,7 +128,7 @@ var PeerConnectionV2 = /** @class */ (function (_super) {
             RTCSessionDescription: DefaultRTCSessionDescription,
             Timeout: DefaultTimeout
         }, options);
-        var configuration = getConfiguration(options);
+        //const configuration = getConfiguration(options);
         var logLevels = buildLogLevels(options.logLevel);
         var RTCPeerConnection = options.RTCPeerConnection;
         if (options.enableDscp === true) {
@@ -138,7 +138,10 @@ var PeerConnectionV2 = /** @class */ (function (_super) {
         }
         var log = options.log ? options.log.createLog('webrtc', _this) : new Log('webrtc', _this, logLevels, options.loggerName);
         console.log('banana config', configuration);
-        var peerConnection = new RTCPeerConnection(configuration, options.chromeSpecificConstraints);
+        var configuration = {
+            enableDtlsSrtp: true
+        };
+        var peerConnection = new window.CitrixWebRTC.CitrixPeerConnection(configuration);
         console.log('banana peer connection created', peerConnection);
         if (options.dummyAudioMediaStreamTrack) {
             peerConnection.addTrack(options.dummyAudioMediaStreamTrack);
@@ -364,13 +367,19 @@ var PeerConnectionV2 = /** @class */ (function (_super) {
         });
         encodingParameters.on('changed', _this._onEncodingParametersChanged);
         // banana changes
-        peerConnection.oniceconnectionstatechange = _this._handleIceConnectionStateChange.bind(_this);
-        // peerConnection.on('datachannel', this._handleDataChannelEvent.bind(this));
+        peerConnection.connectionstatechange = _this._handleConnectionStateChange.bind(_this);
+        peerConnection.datachannel = _this._handleDataChannelEvent.bind(_this);
         peerConnection.onicecandidate = _this._handleIceCandidateEvent.bind(_this);
-        // peerConnection.on('iceconnectionstatechange', this._handleIceConnectionStateChange.bind(this));
+        peerConnection.oniceconnectionstatechange = _this._handleIceConnectionStateChange.bind(_this);
         peerConnection.onicegatheringstatechange = _this._handleIceGatheringStateChange.bind(_this);
-        //peerConnection.onsignalingstatechanged = this._handleSignalingStateChange.bind(this);
+        peerConnection.signalingstatechange = _this._handleSignalingStateChange.bind(_this);
+        peerConnection.onsignalingstatechange = _this._handleSignalingStateChange.bind(_this);
+        // peerConnection.on('datachannel', this._handleDataChannelEvent.bind(this));
+        // peerConnection.on('iceconnectionstatechange', this._handleIceConnectionStateChange.bind(this));
+        // peerConnection.onsignalingstatechanged = this._handleSignalingStateChange.bind(this);
+        peerConnection.onaddstream = _this._handleStreamEvent.bind(_this);
         peerConnection.ontrack = _this._handleTrackEvent.bind(_this);
+        peerConnection.param0 = [];
         var self = _this;
         _this.on('stateChanged', function stateChanged(state) {
             if (state !== 'closed') {
@@ -910,6 +919,10 @@ var PeerConnectionV2 = /** @class */ (function (_super) {
         this._mediaTrackReceivers.add(mediaTrackReceiver);
         mediaStreamTrack.addEventListener('ended', function () { return _this._mediaTrackReceivers.delete(mediaTrackReceiver); });
         this.emit('trackAdded', mediaTrackReceiver);
+        console.log('banana handleTrackEvent', event, mediaTrackReceiver);
+    };
+    PeerConnectionV2.prototype._handleStreamEvent = function (event) {
+        console.log('banana stream event', event);
     };
     /**
      * Initiate ICE Restart.
@@ -983,19 +996,39 @@ var PeerConnectionV2 = /** @class */ (function (_super) {
      * @returns {Promise<void>}
      */
     PeerConnectionV2.prototype._offer = function () {
-        var _this = this;
+        console.log('banana does offer get called?', this._peerConnection);
         var offerOptions = Object.assign({}, this._offerOptions);
+        var sdpConstraints = { mandatory: {
+                OfferToReceiveAudio: true,
+                OfferToReceiveVideo: true
+            }
+        };
+        var peerConnection = this._peerConnection;
         this._needsAnswer = true;
-        var getPromiseAnswer = function () { return new Promise(function (resolve, reject) {
-            _this._peerConnection.createOffer(function (answer) { return resolve(answer); }, function (error) { return reject(error); }), { mandatory: { OfferToReceiveAudio: true, OfferToReceiveVideo: true } };
-        }); };
         if (this._shouldRestartIce) {
             this._shouldRestartIce = false;
             this._isRestartingIce = true;
             offerOptions.iceRestart = true;
         }
+        peerConnection.createOffer(function (localSdp) {
+            //3-2-10: on createOffer success, and it returns local SDP console.log('createOffer() success');
+            //3-2-11: now we can connect local SDP and PeerConnection
+            peerConnection.setLocalDescription(localSdp);
+        }, function (err) {
+            console.log('createOffer() failure with error: ', err);
+        }, sdpConstraints);
         return Promise.all(this._replaceTrackPromises.values())
-            .then(function () { return getPromiseAnswer(); })
+            // .then(() => {
+            //   console.log('banana does this even get called?', this._peerConnection);
+            //   return this._peerConnection.createOffer((answer) => {
+            //     console.log('banana answer', answer);
+            //     this._setLocalDescription({
+            //       type: 'offer',
+            //       sdp: answer?.sdp
+            //     });
+            //   }
+            // , 
+            // (error) => {console.log('banana is this failing?', error)}, { mandatory: {OfferToReceiveAudio: true, OfferToReceiveVideo: true }})})
             .catch(function (err) { return console.log('banana', err); })
             // const errorToThrow = new MediaClientLocalDescFailedError();
             // this._publishMediaWarning({
@@ -1005,6 +1038,7 @@ var PeerConnectionV2 = /** @class */ (function (_super) {
             // });
             // throw errorToThrow;
             .then(function (offer) {
+            // console.log('banana what is this offer', offer);
             // if (isFirefox) {
             //   // NOTE(mmalavalli): We work around Chromium bug 1106157 by disabling
             //   // RTX in Firefox 79+. For more details about the bug, please go here:
@@ -1021,26 +1055,31 @@ var PeerConnectionV2 = /** @class */ (function (_super) {
             // and PSA: https://groups.google.com/forum/#!searchin/discuss-webrtc/PSA%7Csort:date/discuss-webrtc/jcZO-Wj0Wus/k2XvPCvoAwAJ
             // Looks like we are not referencing those attributes, but this changes goes ahead and removes them to see if it works.
             // this also helps reduce bytes on wires
-            var sdp = removeSSRCAttributes(offer === null || offer === void 0 ? void 0 : offer.sdp, ['mslabel', 'label']);
-            sdp = _this._peerConnection.remoteDescription
-                ? filterLocalCodecs(sdp, _this._peerConnection.remoteDescription.sdp)
-                : sdp;
-            var updatedSdp = _this._setCodecPreferences(sdp, _this._preferredAudioCodecs, _this._preferredVideoCodecs);
-            _this._shouldOffer = false;
-            if (!_this._negotiationRole) {
-                _this._negotiationRole = 'offerer';
-            }
-            if (_this._shouldApplySimulcast) {
-                _this._localDescriptionWithoutSimulcast = {
-                    type: 'offer',
-                    sdp: updatedSdp
-                };
-                updatedSdp = _this._setSimulcast(updatedSdp, _this._trackIdsToAttributes);
-            }
-            return _this._setLocalDescription({
-                type: 'offer',
-                sdp: updatedSdp
-            });
+            // let sdp = removeSSRCAttributes(offer?.sdp, ['mslabel', 'label']);
+            // sdp = this._peerConnection.remoteDescription
+            //   ? filterLocalCodecs(sdp, this._peerConnection.remoteDescription.sdp)
+            //   : sdp;
+            // let updatedSdp = this._setCodecPreferences(
+            //   offer?.sdp,
+            //   this._preferredAudioCodecs,
+            //   this._preferredVideoCodecs);
+            // this._shouldOffer = false;
+            // if (!this._negotiationRole) {
+            //   this._negotiationRole = 'offerer';
+            // }
+            // if (this._shouldApplySimulcast) {
+            //   this._localDescriptionWithoutSimulcast = {
+            //     type: 'offer',
+            //     sdp: updatedSdp
+            //   };
+            //   updatedSdp = this._setSimulcast(updatedSdp, this._trackIdsToAttributes);
+            // }
+            // console.log('banana does it make it here in offer?');
+            // return this._setLocalDescription({
+            //   type: 'offer',
+            //   sdp: offer?.sdp
+            // });
+            return;
         });
     };
     /**
@@ -1124,12 +1163,15 @@ var PeerConnectionV2 = /** @class */ (function (_super) {
      */
     PeerConnectionV2.prototype._setLocalDescription = function (description) {
         var _this = this;
+        console.log('banana does this get called setlocal', description);
         if (description.type !== 'rollback' && this._shouldApplyDtx) {
             description = new this._RTCSessionDescription({
                 sdp: enableDtxForOpus(description.sdp),
                 type: 'offer'
             });
         }
+        description.param0 = [];
+        this._peerConnection.param0 = [];
         var setDescription = function () { return new Promise(function (resolve) {
             _this._peerConnection.setLocalDescription(description, function () {
                 if (description.type !== 'rollback') {
@@ -1268,6 +1310,7 @@ var PeerConnectionV2 = /** @class */ (function (_super) {
                     return Promise.resolve();
                 }
                 this._descriptionRevision = description.revision;
+                console.log('banana hello this is getting here');
                 return this._offer();
             case 'offer':
                 if (description.revision <= this._lastStableDescriptionRevision

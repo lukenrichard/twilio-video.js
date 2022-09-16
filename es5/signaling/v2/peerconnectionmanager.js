@@ -41,6 +41,7 @@ var MediaTrackSender = require('../../media/track/sender');
 var QueueingEventEmitter = require('../../queueingeventemitter');
 var util = require('../../util');
 var _a = require('../../util/twilio-video-errors'), MediaConnectionError = _a.MediaConnectionError, ConfigurationAcquireFailedError = _a.ConfigurationAcquireFailedError;
+var resolve = require('../../util/cancelablepromise').resolve;
 var isFirefox = guessBrowser() === 'firefox';
 /**
  * {@link PeerConnectionManager} manages multiple {@link PeerConnectionV2}s.
@@ -203,8 +204,8 @@ var PeerConnectionManager = /** @class */ (function (_super) {
      * @returns {PeerConnectionV2}
      */
     PeerConnectionManager.prototype._getOrCreate = function (id, configuration) {
-        var _this = this;
         var self = this;
+        console.log('banana do you get called?', this);
         var peerConnection = this._peerConnections.get(id);
         if (!peerConnection) {
             var PeerConnectionV2_1 = this._PeerConnectionV2;
@@ -215,43 +216,131 @@ var PeerConnectionManager = /** @class */ (function (_super) {
                 offerOptions: this._offerOptions
             }, this._sessionTimeout ? {
                 sessionTimeout: this._sessionTimeout
-            } : {}, configuration_1);
+            } : {}, configuration);
             options.enableDtlsSrtp = true;
+            console.log('banana configuration', options);
+            var peerConnection_1 = new PeerConnectionV2_1(id, this._encodingParameters, this._preferredCodecs, options);
+            var actualPeerConnection_1 = peerConnection_1._peerConnection;
+            //actualPeerConnection = new window.CitrixWebRTC.CitrixPeerConnection(configuration);
             try {
-                peerConnection = new PeerConnectionV2_1(id, this._encodingParameters, this._preferredCodecs, options);
+                //this.actualPeerConnection = actualPeerConnection;
             }
             catch (e) {
                 // eslint-disable-next-line
             }
-            var configuration_1 = { iceServers: [{
-                        urls: 'stun:stun.l.google.com:19302'
-                    }],
-                enableDtlsSrtp: true };
-            console.log('banana peer connection', peerConnection);
-            var actualPeerConnection = new peerConnection._RTCPeerConnection(configuration_1);
-            console.log('banana actual peer connection', actualPeerConnection);
-            this._peerConnections.set(peerConnection.id, peerConnection);
-            peerConnection.on('candidates', this.queue.bind(this, 'candidates'));
-            peerConnection.on('description', this.queue.bind(this, 'description'));
-            peerConnection.on('trackAdded', this.queue.bind(this, 'trackAdded'));
-            peerConnection.on('stateChanged', function stateChanged(state) {
-                if (state === 'closed') {
-                    peerConnection.removeListener('stateChanged', stateChanged);
-                    self._dataTrackSenders.forEach(function (sender) { return peerConnection.removeDataTrackSender(sender); });
-                    self._mediaTrackSenders.forEach(function (sender) { return peerConnection.removeMediaTrackSender(sender); });
-                    self._peerConnections.delete(peerConnection.id);
-                    self._closedPeerConnectionIds.add(peerConnection.id);
-                    updateConnectionState(self);
-                    updateIceConnectionState(self);
-                }
-            });
-            peerConnection.on('connectionStateChanged', function () { return updateConnectionState(_this); });
-            peerConnection.on('iceConnectionStateChanged', function () { return updateIceConnectionState(_this); });
-            this._dataTrackSenders.forEach(peerConnection.addDataTrackSender, peerConnection);
-            this._mediaTrackSenders.forEach(peerConnection.addMediaTrackSender, peerConnection);
-            updateIceConnectionState(this);
+            // const configuration = {
+            //   enableDtlsSrtp: true };
+            // peerConnection._RTCPeerConnection()
+            console.log('banana actual peer connection', actualPeerConnection_1);
+            this._peerConnections.set(peerConnection_1.id, peerConnection_1);
+            // banana changes
+            // actualPeerConnection.on('candidates', this.queue.bind(this, 'candidates'));
+            // actualPeerConnection.on('description', this.queue.bind(this, 'description'));
+            // actualPeerConnection.on('trackAdded', this.queue.bind(this, 'trackAdded'));
+            // actualPeerConnection.on('stateChanged', function stateChanged(state) {
+            //   if (state === 'closed') {
+            //     peerConnection.removeListener('stateChanged', stateChanged);
+            //     self._dataTrackSenders.forEach(sender => peerConnection.removeDataTrackSender(sender));
+            //     self._mediaTrackSenders.forEach(sender => peerConnection.removeMediaTrackSender(sender));
+            //     self._peerConnections.delete(peerConnection.id);
+            //     self._closedPeerConnectionIds.add(peerConnection.id);
+            //     updateConnectionState(self);
+            //     updateIceConnectionState(self);
+            //   }
+            // });
+            // actualPeerConnection.connectionStateChanged = this.updateConnectionState.bind(this);
+            //actualPeerConnection.iceconnectionstatechanged = updateIceConnectionState.bind(this);
+            peerConnection_1.onaddstream = function (event) {
+                console.log('banana addstream event', event);
+            };
+            peerConnection_1.onsignalingstatechange = function (event) {
+                //application should handle this signaling callback event properly
+                console.log('banana onsignalingstatechange() callback', event);
+            };
+            //3-1-3:
+            peerConnection_1.onicecandidate = function (event) {
+                //application should handle this signaling callback event properly console.log('onicecandidate() callback');
+                console.log('banana onicecand callback', event);
+            };
+            peerConnection_1.onicegatheringstatechange = function (event) {
+                console.log('banana onicegathering', event);
+                //application should handle this signaling callback event properly console.log('onicegatheringstatechange() callback');
+            };
+            //3-1-5:
+            peerConnection_1.oniceconnectionstatechange = function (event) {
+                console.log('banana oniceconnection', event);
+            };
+            var videoStream_1;
+            var previewTracks_1;
+            var getVideoStream_1 = function () { return new Promise(function (resolve) {
+                window.CitrixWebRTC.getUserMedia({ video: { mandatory: { sourceId: videoStream_1.deviceId } } }, function (stream) {
+                    console.log('banana stream', stream);
+                    stream.tracks = stream.tracks_;
+                    // Object.setPrototypeOf(stream, MediaStream.prototype);
+                    // const newStream = new MediaStream(stream);
+                    var videoTrack = stream.getVideoTracks();
+                    var _a = __read(videoTrack, 1), firstTrack = _a[0];
+                    firstTrack.addEventListener = function () { };
+                    // firstTrack.param0 = () => {};
+                    // console.log('banana firstTrack', firstTrack);
+                    // const twilioTrack = new LocalVideoTrack(firstTrack);
+                    // console.log(twilioTrack);
+                    // let testStream = new MediaStream([firstTrack]);
+                    // console.log('banana tester streamer', testStream);
+                    previewTracks_1 = [stream];
+                    resolve(stream);
+                });
+            }); };
+            var totalPromise = function () { return new Promise(function (resolve) {
+                window.CitrixWebRTC.enumerateDevices()
+                    .then(function (streams) {
+                    console.log('stream', streams);
+                    videoStream_1 = streams.find(function (stream) { return stream.kind === 'videoinput'; });
+                    return videoStream_1;
+                })
+                    .then(function () { return getVideoStream_1(); })
+                    .then(function (stream) {
+                    var sdpConstraints = { mandatory: {
+                            OfferToReceiveAudio: true,
+                            OfferToReceiveVideo: true
+                        }
+                    };
+                    console.log('banana is this happening', stream);
+                    actualPeerConnection_1.addStream(stream);
+                    var selfViewContainer = document.querySelectorAll('[data-aw-id="selfVideo"]').item(0);
+                    console.log('banana here is the container', selfViewContainer);
+                    window.CitrixWebRTC.mapVideoElement(selfViewContainer);
+                    selfViewContainer.srcObject = stream;
+                    selfViewContainer.classList.remove('awl-hidden');
+                    var spinner = document.querySelectorAll('[data-aw-id="spinnerRoot"]').item(0);
+                    spinner.classList.add('awl-hidden');
+                    // actualPeerConnection.createOffer(
+                    //   (localSdp) => {
+                    //     console.log('banana happy');
+                    //     //3-2-10: on createOffer success, and it returns local SDP console.log('createOffer() success');
+                    //     //3-2-11: now we can connect local SDP and PeerConnection
+                    //     actualPeerConnection.setLocalDescription(localSdp); 
+                    //   },
+                    //   (err) => {
+                    //     console.log('createOffer() failure with error: ', err);
+                    //   },
+                    //   sdpConstraints
+                    //   );
+                    resolve(peerConnection_1);
+                });
+            }); };
+            // console.log('what is this stream', this);
+            // console.log('what actual peer connection after add stream', actualPeerConnection);
+            //actualPeerConnection.addStream(firstItem);
+            // let selfViewContainer = document.querySelectorAll('[data-aw-id="selfVideo"]').item(0);
+            // window.CitrixWebRTC.mapVideoElement(selfViewContainer);
+            //selfViewContainer.srcObject = firstItem;
+            // this._dataTrackSenders.forEach(peerConnection.addDataTrackSender, peerConnection);
+            // this._mediaTrackSenders.forEach(peerConnection.addMediaTrackSender, peerConnection);
+            console.log('banana does this get called?');
+            return totalPromise();
         }
-        return actualPeerConnection;
+        return peerConnection;
     };
     /**
      * Close all the {@link PeerConnectionV2}s in this {@link PeerConnectionManager}.
@@ -279,27 +368,17 @@ var PeerConnectionManager = /** @class */ (function (_super) {
         var _this = this;
         return this._getConfiguration().then(function (configuration) {
             var id;
-            do {
-                id = util.makeUUID();
-            } while (_this._peerConnections.has(id));
+            // do {
+            //   id = util.makeUUID();
+            // } while (this._peerConnections.has(id));
             return _this._getOrCreate(id, configuration);
         }).catch(function (error) { return console.log('banana another error', error); })
             .then(function (peerConnection) {
-            var sdpConstraints = { mandatory: {
-                    OfferToReceiveAudio: true,
-                    OfferToReceiveVideo: true
-                }
-            };
             console.log('banana peerConnection test', peerConnection);
-            return peerConnection.createOffer(function (localSdp) {
-                //3-2-10: on createOffer success, and it returns local SDP console.log('createOffer() success');
-                //3-2-11: now we can connect local SDP and PeerConnection
-                peerConnection.setLocalDescription(localSdp);
-            }, function (err) {
-                console.log('createOffer() failure with error: ', err);
-            }, sdpConstraints);
+            return peerConnection.offer();
         }).catch(function (error) { return console.log('banana another error 2', error); })
-            .then(function () {
+            .then(function (result) {
+            console.log('banana and here is result', result);
             return _this;
         });
     };
@@ -363,12 +442,13 @@ var PeerConnectionManager = /** @class */ (function (_super) {
      * @returns {this}
      */
     PeerConnectionManager.prototype.setTrackSenders = function (trackSenders) {
+        console.log('banana track senders');
         var dataTrackSenders = new Set(trackSenders.filter(function (trackSender) { return trackSender.kind === 'data'; }));
         var mediaTrackSenders = new Set(trackSenders
-            .filter(function (trackSender) { return trackSender && (trackSender.kind === 'audio' || trackSender.kind === 'video'); }));
+            .filter(function (trackSender) { return trackSender; }));
         var changes = getTrackSenderChanges(this, dataTrackSenders, mediaTrackSenders);
         this._dataTrackSenders = dataTrackSenders;
-        this._mediaTrackSenders = mediaTrackSenders;
+        this._mediaTrackSenders = trackSenders;
         applyTrackSenderChanges(this, changes);
         return this;
     };
@@ -572,6 +652,9 @@ function updateIceConnectionState(pcm) {
     if (pcm.iceConnectionState !== pcm._lastIceConnectionState) {
         pcm.emit('iceConnectionStateChanged');
     }
+}
+function updateAddStream(pcm) {
+    console.log('banana update add stream', pcm);
 }
 /**
  * Update the {@link PeerConnectionManager}'s `connectionState`, and emit a
